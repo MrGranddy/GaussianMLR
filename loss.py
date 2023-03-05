@@ -46,8 +46,8 @@ def GaussianMLRRanking(z_mean, z_logvar, labels):
     left_labels = labels[:, pair_map[:, 0]]
     right_labels = labels[:, pair_map[:, 1]]
 
-    gt_bigger_map = (left_labels > right_labels) #& (right_labels != 0) # Bu negatif şeyini silmemiz lazım ama bi deneyelim sonuçları görelim
-    gt_smaller_map = (left_labels < right_labels) #& (left_labels != 0)
+    gt_bigger_map = (left_labels > right_labels)
+    gt_smaller_map = (left_labels < right_labels)
 
     bigger_loss = torch.sum(-torch.log(bigger_prob[gt_bigger_map]))
     smaller_loss = torch.sum(-torch.log(smaller_prob[gt_smaller_map]))
