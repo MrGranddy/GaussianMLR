@@ -1,180 +1,109 @@
-# from scipy.ndimage import rotate
-import colorsys
+import argparse
+import yaml
 import hashlib
 import json
 import os
 import random
 import shutil
+from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 from PIL import Image
+from collections import namedtuple
 
-dataset_name = "ranked_mnist_gray_small_scale_small_variance"
-save_directory = "/mnt/disk2/ranked_MNIST_family"
-config_path = "configs"
+from dataset_creation.digit_placement import place_digit, DigitPlacement
+from dataset_creation.mnist_utils import load_mnist_paths
 
-hash_object = hashlib.md5(dataset_name.encode())
-seed = int(hash_object.hexdigest(), 16) % (10**9 + 7)
+def main():
+    parser = argparse.ArgumentParser(description="Generate a synthetic dataset using MNIST digits.")
+    parser.add_argument("config", help="Path to the YAML configuration file")
+    args = parser.parse_args()
 
-random.seed(seed)
-np.random.seed(seed)
+    with open(args.config, "r") as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+        common_config_path = config["COMMON_CONFIG_PATH"]
+    
+    with open(common_config_path, "r") as f:
+        common_config = yaml.load(f, Loader=yaml.FullLoader)
 
-if not os.path.isdir(save_directory):
-    os.makedirs(save_directory)
+    dataset_name = config["DATASET_NAME"]
+    datasets_path = common_config["DATASETS_PATH"]
+    labels_path = common_config["LABELS_PATH"]
 
-if not os.path.isdir(config_path):
-    os.makedirs(config_path)
+    # Create unique seed for this dataset name for reproducibility
+    hash_object = hashlib.md5(dataset_name.encode())
+    seed = int(hash_object.hexdigest(), 16) % (10**9 + 7)
+    random.seed(seed)
+    np.random.seed(seed)
 
-dataset_path = os.path.join(save_directory, dataset_name)
+    # Ensure dataset and label directories exist
+    os.makedirs(datasets_path, exist_ok=True)
+    os.makedirs(labels_path, exist_ok=True)
 
-if os.path.isdir(dataset_path):
-    sel = input(
-        "A folder for this dataset already exists, do you want to override? (Y/n)"
-    )
-    if sel.lower() == "y":
-        shutil.rmtree(dataset_path)
-        os.makedirs(dataset_path)
-    else:
-        print("Quitting...")
-        exit(1)
+    dataset_path = os.path.join(datasets_path, dataset_name)
 
-MIN_NUM_LABELS = 1
-MAX_NUM_LABELS = 10
+    if os.path.exists(dataset_path):
+        sel = input("A folder for this dataset already exists, do you want to override? (Y/n) ")
+        if sel.lower() == 'y':
+            shutil.rmtree(dataset_path)
+        else:
+            print("Quitting...")
+            exit(1)
+    os.makedirs(dataset_path)
 
-c_height, c_width = 224, 224
+    mnist_paths = {
+        "train": common_config["MNIST_TRAIN_PATH"],
+        "test": common_config["MNIST_TEST_PATH"],
+    }
+    mnist = load_mnist_paths(mnist_paths['train'], mnist_paths['test'])
 
-RATIO_LIM = (1, 1.5)
-MAX_ROT = 180 * np.pi / 16
-MIN_MARGIN = 1
+    # Directory setup for train, val, test
+    for mode in ["train", "val", "test"]:
+        os.makedirs(os.path.join(dataset_path, mode), exist_ok=True)
 
-TRAIN_SIZE = 60000
-VAL_SIZE = 10000
-TEST_SIZE = 10000
+    # Generation process
+    counts = [0] * 12
+    splitted_labels = {mode: [] for mode in ["train", "val", "test"]}
+    sizes = {
+        "train": config["TRAIN_SIZE"],
+        "val": config["VAL_SIZE"],
+        "test": config["TEST_SIZE"]
+    }
 
-# The paths for MNIST in you local system
-# All MNIST images are converted into RGB PNG format
-mnist_paths = {
-    "train": "/mnt/disk1/documents/Digit-Five/MNIST_train",
-    "test": "/mnt/disk1/documents/Digit-Five/MNIST_test",
-}
+    for mode, size in sizes.items():
+        mnist_mode = "train" if mode != "test" else "test"
+        for idx in range(size):
+            canvas = np.zeros((config["C_HEIGHT"], config["C_WIDTH"], 3), dtype="float32")
+            num_labels = random.choice(range(config["MIN_NUM_LABELS"], config["MAX_NUM_LABELS"] + 1))
+            labels = np.random.choice(range(10), num_labels, replace=False)
+            put_digits: List[DigitPlacement] = []
 
-# Create dictionary for easy reading
-mnist = {
-    "train": {
-        int(digit): [
-            os.path.join(mnist_paths["train"], digit, img_name)
-            for img_name in os.listdir(os.path.join(mnist_paths["train"], digit))
-        ]
-        for digit in os.listdir(mnist_paths["train"])
-    },
-    "test": {
-        int(digit): [
-            os.path.join(mnist_paths["test"], digit, img_name)
-            for img_name in os.listdir(os.path.join(mnist_paths["test"], digit))
-        ]
-        for digit in os.listdir(mnist_paths["test"])
-    },
-}
-# Dict format: { "mode": {"which_digit? e.g. 0, 2, 7": ["full_path_of_image"] } }
+            for label in labels:
+                digit = place_digit(mnist[mnist_mode], label, config["C_HEIGHT"], config["C_WIDTH"],
+                                    config["RATIO_LIM"], config["MIN_MARGIN"], put_digits)
+                if digit:
+                    put_digits.append(digit)
 
-for mode in ["train", "val", "test"]:
-    os.makedirs(os.path.join(dataset_path, mode))
+            put_digits.sort(key=lambda x: x.ratio)
+            gt = [0] * 10
 
-num_label_choices = range(MIN_NUM_LABELS, MAX_NUM_LABELS + 1)
+            for rank, digit in enumerate(put_digits):
+                img = Image.open(digit.img_path).resize((digit.scaled_length,) * 2, Image.BILINEAR)
+                img_array = np.array(img)[..., 0] / 255.0
+                canvas[digit.y:digit.y + digit.scaled_length, digit.x:digit.x + digit.scaled_length] = np.repeat(img_array[:, :, np.newaxis], 3, axis=2)
+                gt[digit.label] = rank + 1
 
-splitted_labels = {}
-counts = [0] * 12
+            Image.fromarray((canvas * 255).astype("uint8")).save(os.path.join(dataset_path, mode, f"{idx}.png"))
+            splitted_labels[mode].append((os.path.join(dataset_name, mode, f"{idx}.png"), gt))
 
-for mode in ["train", "val", "test"]:
+            if idx % 100 == 0:
+                print(f"{mode}: {idx}/{size}")
 
-    if mode == "train":
-        set_size = TRAIN_SIZE
-        mnist_mode = "train"
-    elif mode == "val":
-        set_size = VAL_SIZE
-        mnist_mode = "train"
-    else:
-        set_size = TEST_SIZE
-        mnist_mode = "test"
+    # Save label data
+    with open(os.path.join(labels_path, f"{dataset_name}.json"), "w") as f:
+        json.dump(splitted_labels, f)
+    print([c / sum(counts) for c in counts])
 
-    splitted_labels[mode] = []
-    for idx in range(set_size):
 
-        canvas = np.zeros((c_height, c_width, 3), dtype="float32")
-        num_labels = random.choice(num_label_choices)
-        labels = np.random.choice(range(10), num_labels, replace=False)
-        put_digits = []
-
-        for label in labels:
-
-            try_count = 0  # If can't place the digit (e.g. there is no room for another digit) stop trying
-            while try_count < 1000:
-
-                ratio = np.random.uniform(RATIO_LIM[0], RATIO_LIM[1])
-                img_path = random.choice(mnist[mnist_mode][label])
-
-                scaled_len = int(28 * ratio)
-
-                l = np.random.randint(MIN_MARGIN, c_width - scaled_len - MIN_MARGIN)
-                t = np.random.randint(MIN_MARGIN, c_width - scaled_len - MIN_MARGIN)
-
-                can_fit = True
-                for digit in put_digits:
-                    ll, tt, ss, _, _, _ = digit
-
-                    intersect_check = 2 * abs(
-                        (l + scaled_len // 2) - (ll + ss // 2)
-                    ) < (ss + scaled_len) and 2 * abs(
-                        (t + scaled_len // 2) - (tt + ss // 2)
-                    ) < (
-                        ss + scaled_len
-                    )
-
-                    if intersect_check:
-                        can_fit = False
-                        break
-
-                if can_fit:
-                    break
-
-                try_count += 1
-
-            put_digits.append((l, t, scaled_len, ratio, img_path, label))
-
-        put_digits = sorted(put_digits, key=lambda x: x[3])
-
-        gt = [0] * 10
-
-        for rank, digit in enumerate(put_digits):
-            l, t, scaled_len, ratio, img_path, label = digit
-
-            img = np.array(
-                Image.open(img_path).resize((scaled_len,) * 2, Image.BILINEAR)
-            )[..., 0]
-
-            img = img.astype("float32") / 255
-            # rand_hsv_color = (np.random.rand(), np.random.uniform(0.5, 1.0), 1.0)
-            # rand_rgb_color = colorsys.hsv_to_rgb(*rand_hsv_color)
-            img = np.repeat(np.expand_dims(img, axis=2), 3, axis=2)
-
-            # img = rotate(img, np.random.uniform(-MAX_ROT, MAX_ROT))
-
-            canvas[t : t + scaled_len, l : l + scaled_len, ...] = img
-
-            gt[label] = rank + 1
-
-        Image.fromarray((canvas * 255).astype("uint8")).save(
-            os.path.join(dataset_path, mode, "%d.png" % idx)
-        )
-        splitted_labels[mode].append(
-            (os.path.join(dataset_name, mode, "%d.png" % idx), gt)
-        )
-
-        counts[sum(1 for g in gt if g > 0)] += 1
-
-        if idx % 100 == 0:
-            print(mode, "%d/%d" % (idx, set_size))
-
-with open(os.path.join(config_path, "%s.json" % dataset_name), "w") as f:
-    json.dump(splitted_labels, f)
-print([c / sum(counts) for c in counts])
+if __name__ == "__main__":
+    main()
