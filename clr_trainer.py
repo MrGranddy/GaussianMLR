@@ -1,24 +1,19 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-from torch.utils.data import DataLoader
+import argparse
+import os
+import time
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
 
-import os
-import time
-
-import argparse
-
+from loss import strong_CLR, weak_CLR
 from model import Model
-from reader import RankedMNISTReader, LandscapeReader, ArchitectureReader
-from loss import weak_CLR, strong_CLR
-
+from reader import ArchitectureReader, LandscapeReader, RankedMNISTReader
 from utils import save_plot
-
-import warnings
 
 warnings.filterwarnings("ignore")
 
@@ -60,14 +55,18 @@ bs = 64
 
 if args.dataset == "ranked_mnist":
     train_loader = DataLoader(
-        RankedMNISTReader(args.main_path, args.config_path, mode="train", subset=args.subset),
+        RankedMNISTReader(
+            args.main_path, args.config_path, mode="train", subset=args.subset
+        ),
         batch_size=bs,
         shuffle=True,
         num_workers=8,
     )
 
     val_loader = DataLoader(
-        RankedMNISTReader(args.main_path, args.config_path, mode="val", subset=args.subset),
+        RankedMNISTReader(
+            args.main_path, args.config_path, mode="val", subset=args.subset
+        ),
         batch_size=bs,
         shuffle=False,
         num_workers=8,
@@ -123,7 +122,9 @@ if args.dataset == "ranked_mnist":
     optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-4, weight_decay=1.0e-5)
     schedual = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.9)
 elif args.dataset == "landscape" or args.dataset:
-    model = Model((n_classes * (n_classes - 1)) // 2, args.backbone, pretrained=True).to(device_name)
+    model = Model(
+        (n_classes * (n_classes - 1)) // 2, args.backbone, pretrained=True
+    ).to(device_name)
     optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-4, weight_decay=1.0e-5)
     schedual = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.9)
 

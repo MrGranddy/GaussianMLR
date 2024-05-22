@@ -1,13 +1,13 @@
-import torch
-import numpy as np
-from model import GaussianModel, Model, LSEPModel
-from PIL import Image
-import torchvision.transforms.functional as TF
-
-import os
 import argparse
+import os
 
 import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torchvision.transforms.functional as TF
+from PIL import Image
+
+from model import GaussianModel, LSEPModel, Model
 
 bs = 64
 device_name = "cuda:1"
@@ -32,22 +32,32 @@ elif args.dataset == "ranked_mnist_gray":
 elif args.dataset == "landscape":
     n_classes = 9
     save_name = "landscape_resnet18_%s_strong" % args.method
-    classes = ["plant", "sky", "cloud", "snow", "building", "desert", "mountain", "water", "sun"]
+    classes = [
+        "plant",
+        "sky",
+        "cloud",
+        "snow",
+        "building",
+        "desert",
+        "mountain",
+        "water",
+        "sun",
+    ]
 elif args.dataset == "architecture":
     n_classes = 9
     save_name = "architecture_ARC_resnet18_%s_strong" % args.method
-    classes = ["asym", "clr", "crys", "flow", "iso", "prog","reg", "shp", "sym"]
+    classes = ["asym", "clr", "crys", "flow", "iso", "prog", "reg", "shp", "sym"]
 
 dataset_path = "bar_plots/%s" % args.dataset
 
-image_paths = [ os.path.join( dataset_path, path ) for path in os.listdir(dataset_path) ]
+image_paths = [os.path.join(dataset_path, path) for path in os.listdir(dataset_path)]
 
 if args.method == "gaussian_mlr":
     model = GaussianModel(n_classes, backbone).to(device_name)
     best_path = "results/%s/saves/best.pth" % save_name
 
 elif args.method == "clr":
-    n_classes += 1 # Add virtual label
+    n_classes += 1  # Add virtual label
     model = Model((n_classes * (n_classes - 1)) // 2, backbone).to(device_name)
     best_path = "results/%s/saves/best.pth" % save_name
 
@@ -82,7 +92,12 @@ all_thresholds = []
 with torch.no_grad():
     for image_path in image_paths:
 
-        image = TF.pil_to_tensor(Image.open(image_path).convert("RGB").resize((224, 224))).float() / 255.0
+        image = (
+            TF.pil_to_tensor(
+                Image.open(image_path).convert("RGB").resize((224, 224))
+            ).float()
+            / 255.0
+        )
         image = (image - MEAN) / STD
         image = image.unsqueeze(0).to(device_name)
 
@@ -94,23 +109,32 @@ with torch.no_grad():
         elif args.method == "clr":
             logits = model(image)
             probs = torch.sigmoid(logits)
-    
-            pair_map = torch.tensor([(i, j) for i in range(n_classes - 1) for j in range(i + 1, n_classes)]).to(device_name)
+
+            pair_map = torch.tensor(
+                [(i, j) for i in range(n_classes - 1) for j in range(i + 1, n_classes)]
+            ).to(device_name)
             left_scores = probs >= 0.5
             right_scores = probs < 0.5
 
             score_matrix = torch.zeros((1, n_classes)).to(device_name)
 
             for j in range(n_classes):
-                score_matrix[:, j] += torch.sum(left_scores[:, pair_map[:, 0] == j] * probs[:, pair_map[:, 0] == j], dim=1)
-                score_matrix[:, j] += torch.sum(right_scores[:, pair_map[:, 1] == j] * probs[:, pair_map[:, 1] == j], dim=1)
+                score_matrix[:, j] += torch.sum(
+                    left_scores[:, pair_map[:, 0] == j] * probs[:, pair_map[:, 0] == j],
+                    dim=1,
+                )
+                score_matrix[:, j] += torch.sum(
+                    right_scores[:, pair_map[:, 1] == j]
+                    * probs[:, pair_map[:, 1] == j],
+                    dim=1,
+                )
 
-            all_thresholds.append( score_matrix[0, -1].item() )
+            all_thresholds.append(score_matrix[0, -1].item())
             scores = score_matrix[:, :-1]
 
         elif args.method == "lsep":
             scores, thresholds = model(image)
-            all_thresholds.append( thresholds[0].cpu().detach().numpy() )
+            all_thresholds.append(thresholds[0].cpu().detach().numpy())
 
         scores = scores.cpu().detach().numpy()
         all_scores.append(scores[0])
@@ -130,9 +154,18 @@ for i in range(len(image_paths)):
     fig.tight_layout()
     fig.figsize = (4, 4)
 
-
-    ax.bar(x[all_scores[i] >= all_thresholds[i]], all_scores[i][all_scores[i] >= all_thresholds[i]], width=0.5, color="green")
-    ax.bar(x[all_scores[i] < all_thresholds[i]], all_scores[i][all_scores[i] < all_thresholds[i]], width=0.5, color="red")
+    ax.bar(
+        x[all_scores[i] >= all_thresholds[i]],
+        all_scores[i][all_scores[i] >= all_thresholds[i]],
+        width=0.5,
+        color="green",
+    )
+    ax.bar(
+        x[all_scores[i] < all_thresholds[i]],
+        all_scores[i][all_scores[i] < all_thresholds[i]],
+        width=0.5,
+        color="red",
+    )
 
     if args.method == "clr":
         ax.bar(n_classes, all_thresholds[i], width=0.5, color="purple")
@@ -141,22 +174,39 @@ for i in range(len(image_paths)):
     ax.set_ylim(-x_lim_max, x_lim_max)
 
     if args.method == "clr":
-        ax.set_xticks(x.tolist() + [n_classes], classes + ["vl"], rotation=ROTATION, ha="right")
-        ax.plot([0., n_classes + 0.5], [0.0, 0.0], color="black", linestyle="-")
+        ax.set_xticks(
+            x.tolist() + [n_classes], classes + ["vl"], rotation=ROTATION, ha="right"
+        )
+        ax.plot([0.0, n_classes + 0.5], [0.0, 0.0], color="black", linestyle="-")
     else:
         ax.set_xticks(x.tolist(), classes, rotation=ROTATION, ha="right")
 
     if args.method == "lsep":
         for j in range(len(all_thresholds[i])):
-            ax.plot([float(j) - 0.25, float(j) + 0.25], [all_thresholds[i][j], all_thresholds[i][j] ], color="purple", linestyle="-", linewidth=4)
+            ax.plot(
+                [float(j) - 0.25, float(j) + 0.25],
+                [all_thresholds[i][j], all_thresholds[i][j]],
+                color="purple",
+                linestyle="-",
+                linewidth=4,
+            )
             pass
-        ax.plot([0., n_classes], [0.0, 0.0], color="black", linestyle="-")
+        ax.plot([0.0, n_classes], [0.0, 0.0], color="black", linestyle="-")
     else:
-        ax.plot([0., n_classes], [all_thresholds[i], all_thresholds[i]], color="purple", linestyle="--")
+        ax.plot(
+            [0.0, n_classes],
+            [all_thresholds[i], all_thresholds[i]],
+            color="purple",
+            linestyle="--",
+        )
 
     ax.set_ylabel("Scores", fontsize=18, fontweight="heavy")
     plt.xticks(fontsize=12, fontweight="heavy")
     plt.yticks(fontsize=12, fontweight="heavy")
 
-    plt.savefig("bar_plots/%s_%s.pdf" % (args.method, image_paths[i].split("/")[-1].split(".")[0]), bbox_inches='tight')
+    plt.savefig(
+        "bar_plots/%s_%s.pdf"
+        % (args.method, image_paths[i].split("/")[-1].split(".")[0]),
+        bbox_inches="tight",
+    )
     plt.close()

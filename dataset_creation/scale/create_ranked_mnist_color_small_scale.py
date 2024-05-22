@@ -1,22 +1,21 @@
-from itertools import count
-import os
-import shutil
-import json
-
-import numpy as np
-import random
-from PIL import Image
-
 # from scipy.ndimage import rotate
 import colorsys
 import hashlib
+import json
+import os
+import random
+import shutil
+from itertools import count
+
+import numpy as np
+from PIL import Image
 
 dataset_name = "ranked_mnist_color_small_scale"
 save_directory = "/mnt/disk2/ranked_MNIST_family"
 config_path = "../configs"
 
 hash_object = hashlib.md5(dataset_name.encode())
-seed = int(hash_object.hexdigest(), 16) % (10 ** 9 + 7)
+seed = int(hash_object.hexdigest(), 16) % (10**9 + 7)
 
 random.seed(seed)
 np.random.seed(seed)

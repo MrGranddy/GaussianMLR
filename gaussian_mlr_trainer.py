@@ -1,25 +1,20 @@
+import argparse
+import os
+import time
+import warnings
+
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms.functional as TF
-
 from torch.utils.data import DataLoader
 
-import matplotlib.pyplot as plt
-import numpy as np
-
-import os
-import time
-
-import argparse
-
-from model import GaussianModel
-from reader import RankedMNISTReader, LandscapeReader, ArchitectureReader
 from loss import GaussianMLR, weak_GaussianMLR
-
+from model import GaussianModel
+from reader import ArchitectureReader, LandscapeReader, RankedMNISTReader
 from utils import save_plot
-
-import warnings
 
 warnings.filterwarnings("ignore")
 
@@ -61,14 +56,18 @@ bs = 64
 
 if args.dataset == "ranked_mnist":
     train_loader = DataLoader(
-        RankedMNISTReader(args.main_path, args.config_path, mode="train", subset=args.subset),
+        RankedMNISTReader(
+            args.main_path, args.config_path, mode="train", subset=args.subset
+        ),
         batch_size=bs,
         shuffle=True,
         num_workers=8,
     )
 
     val_loader = DataLoader(
-        RankedMNISTReader(args.main_path, args.config_path, mode="val", subset=args.subset),
+        RankedMNISTReader(
+            args.main_path, args.config_path, mode="val", subset=args.subset
+        ),
         batch_size=bs,
         shuffle=False,
         num_workers=8,
@@ -143,7 +142,7 @@ for epoch_idx in range(n_epoch):
 
         model.zero_grad()
         optimizer.zero_grad()
- 
+
         images = images.to(device_name)
         labels = labels.to(device_name)
 

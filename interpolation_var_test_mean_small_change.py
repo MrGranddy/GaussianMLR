@@ -1,20 +1,19 @@
-import torch
-import os
-import numpy as np
-
-from torch.utils.data import DataLoader
-from reader import RankedMNISTReader
-from model import GaussianModel, Model, LSEPModel
-
-import torchvision.transforms.functional as TF
-from PIL import Image
-import matplotlib.pyplot as plt
-
-from matplotlib.ticker import FormatStrFormatter
-
 import argparse
+import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torchvision.transforms.functional as TF
+from matplotlib.ticker import FormatStrFormatter
+from PIL import Image
+from torch.utils.data import DataLoader
+
+from model import GaussianModel, LSEPModel, Model
+from reader import RankedMNISTReader
 
 sqrt_two = np.sqrt(2)
+
 
 # The probability of a Gaussian variable being positive
 def gaussian_variable_positive_probability(z_mean, z_std):
@@ -37,6 +36,7 @@ supervision = args.supervision
 
 ranked_mnist_path = "/mnt/disk2/interpolation_test_images/small_change"
 
+
 def read_model(path):
     seq_path = os.path.join(path)
     ckpt = torch.load(seq_path)
@@ -50,14 +50,21 @@ color_map = [colors[0]] + [colors[idx] for idx in range(1, 4)] + [colors[0]] * 6
 
 
 if args.method == "lsep":
-    path = "results/gray_small_scale_small_variance_%s_%s_%s/saves/threshold_best.pth" % (backbone, method, supervision)
+    path = (
+        "results/gray_small_scale_small_variance_%s_%s_%s/saves/threshold_best.pth"
+        % (backbone, method, supervision)
+    )
 else:
-    path = "results/gray_small_scale_small_variance_%s_%s_%s/saves/best.pth" % (backbone, method, supervision)
+    path = "results/gray_small_scale_small_variance_%s_%s_%s/saves/best.pth" % (
+        backbone,
+        method,
+        supervision,
+    )
 
 if method == "gaussian_mlr":
     model = GaussianModel(10, backbone).to(device_name)
 elif method == "clr":
-    model = Model((11*10)//2, backbone).to(device_name)
+    model = Model((11 * 10) // 2, backbone).to(device_name)
 elif method == "lsep":
     model = LSEPModel(10, backbone).to(device_name)
 
@@ -84,7 +91,12 @@ for dir_name in os.listdir(ranked_mnist_path):
 
     for t_idx, image_path in enumerate(images):
 
-        image = TF.to_tensor(Image.open(image_path).convert("RGB")).to(device_name).unsqueeze(0) - 0.5
+        image = (
+            TF.to_tensor(Image.open(image_path).convert("RGB"))
+            .to(device_name)
+            .unsqueeze(0)
+            - 0.5
+        )
         mean, logvar = model(image)
         var = torch.exp(logvar)
 
@@ -99,7 +111,7 @@ scores = np.mean(all_scores, axis=0)
 
 t = np.linspace(0.0, 1.0, len(images))
 
-#plt.figure(figsize=(6, 3))
+# plt.figure(figsize=(6, 3))
 fig, ax = plt.subplots()
 ax.set_box_aspect(1)
 
@@ -111,6 +123,10 @@ ax.set_xlabel("t", fontsize=18, fontweight="heavy")
 ax.set_ylabel("$\sigma^2$", fontsize=18, fontweight="heavy")
 plt.xticks(fontsize=18, fontweight="heavy")
 plt.yticks(fontsize=18, fontweight="heavy")
-plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.4f'))
+plt.gca().yaxis.set_major_formatter(FormatStrFormatter("%.4f"))
 
-plt.savefig("interpolation_var_test_results/small_change_%s_%s_%s.pdf" % (backbone, method, supervision), bbox_inches="tight")
+plt.savefig(
+    "interpolation_var_test_results/small_change_%s_%s_%s.pdf"
+    % (backbone, method, supervision),
+    bbox_inches="tight",
+)

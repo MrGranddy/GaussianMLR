@@ -1,24 +1,19 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-from torch.utils.data import DataLoader
+import argparse
+import os
+import time
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
 
-import os
-import time
-
-import argparse
-
+from loss import MultiThresholdLoss, strong_LSEP, weak_LSEP
 from model import LSEPModel
-from reader import RankedMNISTReader, LandscapeReader, ArchitectureReader
-from loss import MultiThresholdLoss, weak_LSEP, strong_LSEP
-
+from reader import ArchitectureReader, LandscapeReader, RankedMNISTReader
 from utils import save_plot
-
-import warnings
 
 warnings.filterwarnings("ignore")
 
@@ -62,14 +57,18 @@ stage = args.stage
 
 if args.dataset == "ranked_mnist":
     train_loader = DataLoader(
-        RankedMNISTReader(args.main_path, args.config_path, mode="train", subset=args.subset),
+        RankedMNISTReader(
+            args.main_path, args.config_path, mode="train", subset=args.subset
+        ),
         batch_size=bs,
         shuffle=True,
         num_workers=8,
     )
 
     val_loader = DataLoader(
-        RankedMNISTReader(args.main_path, args.config_path, mode="val", subset=args.subset),
+        RankedMNISTReader(
+            args.main_path, args.config_path, mode="val", subset=args.subset
+        ),
         batch_size=bs,
         shuffle=False,
         num_workers=8,
@@ -126,22 +125,27 @@ best_val_loss = 999999999
 stats = {"train": {}, "val": {}}
 
 
-
 if args.dataset == "ranked_mnist":
     model = LSEPModel(n_classes, args.backbone).to(device_name)
     if stage == "threshold":
-        state_dict = torch.load(os.path.join(save_path, "ranking_best.pth"))["state_dict"]
+        state_dict = torch.load(os.path.join(save_path, "ranking_best.pth"))[
+            "state_dict"
+        ]
         model.load_state_dict(state_dict)
         parameters = list(model.fc.parameters())
         model = model.to(device_name)
     else:
-        parameters = list(model.fc.parameters()) + list(model.feature_extractor.parameters())
+        parameters = list(model.fc.parameters()) + list(
+            model.feature_extractor.parameters()
+        )
     optimizer = torch.optim.Adam(parameters, lr=1.0e-4, weight_decay=1.0e-5)
     schedual = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.9)
 elif args.dataset == "landscape" or args.dataset == "architecture":
     model = LSEPModel(n_classes, args.backbone, pretrained=True).to(device_name)
     if stage == "threshold":
-        state_dict = torch.load(os.path.join(save_path, "ranking_best.pth"))["state_dict"]
+        state_dict = torch.load(os.path.join(save_path, "ranking_best.pth"))[
+            "state_dict"
+        ]
         model.load_state_dict(state_dict)
         parameters = list(model.fc.parameters())
         model = model.to(device_name)
@@ -253,6 +257,5 @@ for epoch_idx in range(n_epoch):
             {"state_dict": model.state_dict(), "stats": stats},
             os.path.join(save_path, "%s_best.pth" % stage),
         )
-        
 
     schedual.step()

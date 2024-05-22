@@ -1,19 +1,15 @@
-import torch
+import argparse
 import os
-import numpy as np
-
-from model import GaussianModel, Model, LSEPModel
-
-import torchvision.transforms.functional as TF
-from PIL import Image
 
 import matplotlib.pyplot as plt
-
+import numpy as np
 import scipy.stats as stats
-
-import argparse
-
+import torch
+import torchvision.transforms.functional as TF
 from matplotlib.ticker import FormatStrFormatter
+from PIL import Image
+
+from model import GaussianModel, LSEPModel, Model
 
 device_name = "cuda:0"
 
@@ -30,7 +26,11 @@ method = args.method
 supervision = args.supervision
 num_digits = args.num_digits
 
-ranked_mnist_path = "/mnt/disk2/calibration_%s_test_%d_images/" % (args.mode, num_digits)
+ranked_mnist_path = "/mnt/disk2/calibration_%s_test_%d_images/" % (
+    args.mode,
+    num_digits,
+)
+
 
 def read_model(path):
     seq_path = os.path.join(path)
@@ -39,20 +39,31 @@ def read_model(path):
 
     return state_dict
 
+
 colors = ["#004D40", "#D81B60", "#1E88E5", "#FFC107"]
 color_map = [colors[0]] + [colors[idx] for idx in range(1, 4)] + [colors[0]] * 6
 
 
 if args.method == "lsep":
-    path = "results/gray_small_%s_%s_%s_%s/saves/threshold_best.pth" % (args.mode, backbone, method, supervision)
+    path = "results/gray_small_%s_%s_%s_%s/saves/threshold_best.pth" % (
+        args.mode,
+        backbone,
+        method,
+        supervision,
+    )
 else:
-    path = "results/gray_small_%s_%s_%s_%s/saves/best.pth" % (args.mode, backbone, method, supervision)
+    path = "results/gray_small_%s_%s_%s_%s/saves/best.pth" % (
+        args.mode,
+        backbone,
+        method,
+        supervision,
+    )
 
 
 if method == "gaussian_mlr":
     model = GaussianModel(10, backbone).to(device_name)
 elif method == "clr":
-    model = Model((11*10)//2, backbone).to(device_name)
+    model = Model((11 * 10) // 2, backbone).to(device_name)
 elif method == "lsep":
     model = LSEPModel(10, backbone).to(device_name)
 
@@ -68,10 +79,13 @@ for img_name in os.listdir(ranked_mnist_path):
 
     img_path = os.path.join(ranked_mnist_path, img_name)
 
-    image = TF.to_tensor(Image.open(img_path).convert("RGB")).to(device_name).unsqueeze(0) - 0.5
+    image = (
+        TF.to_tensor(Image.open(img_path).convert("RGB")).to(device_name).unsqueeze(0)
+        - 0.5
+    )
 
     sel_digits = list(map(int, img_name.split(".")[0].split("_")[1:]))
-    
+
     if method == "gaussian_mlr":
         mean, logvar = model(image)
         mean[mean < 0] = 0.0
@@ -91,15 +105,23 @@ for img_name in os.listdir(ranked_mnist_path):
         N, _ = probs.shape
         K = 11
 
-        pair_map = torch.tensor([(i, j) for i in range(K - 1) for j in range(i + 1, K)]).to(device_name)
+        pair_map = torch.tensor(
+            [(i, j) for i in range(K - 1) for j in range(i + 1, K)]
+        ).to(device_name)
         left_scores = probs >= 0.5
         right_scores = probs < 0.5
 
         score_matrix = torch.zeros((N, K)).to(device_name)
 
         for j in range(K):
-            score_matrix[:, j] += torch.sum(left_scores[:, pair_map[:, 0] == j] * probs[:, pair_map[:, 0] == j], dim=1)
-            score_matrix[:, j] += torch.sum(right_scores[:, pair_map[:, 1] == j] * probs[:, pair_map[:, 1] == j], dim=1)
+            score_matrix[:, j] += torch.sum(
+                left_scores[:, pair_map[:, 0] == j] * probs[:, pair_map[:, 0] == j],
+                dim=1,
+            )
+            score_matrix[:, j] += torch.sum(
+                right_scores[:, pair_map[:, 1] == j] * probs[:, pair_map[:, 1] == j],
+                dim=1,
+            )
 
         negative_map = score_matrix < score_matrix[:, -1].unsqueeze(1).repeat(1, K)
         score_matrix[negative_map] = 0
@@ -112,7 +134,7 @@ for img_name in os.listdir(ranked_mnist_path):
 
         score = np.array(score.detach().cpu())[0, sel_digits]
 
-    all_scores.append( score )
+    all_scores.append(score)
 
 all_scores = np.array(all_scores)
 score_means = np.mean(all_scores, axis=0)
@@ -131,16 +153,31 @@ for i in range(num_digits):
     if np.max(y_range) > max_prob:
         max_prob = np.max(y_range)
 
-    plt.plot( x_range, y_range, color=color_map[i], label="Scale=%.1f" % (1 + i * 0.5), linewidth=4)
+    plt.plot(
+        x_range,
+        y_range,
+        color=color_map[i],
+        label="Scale=%.1f" % (1 + i * 0.5),
+        linewidth=4,
+    )
 
 plt.xlabel("x", fontsize=18, fontweight="heavy")
 plt.ylabel("p(x)", fontsize=18, fontweight="heavy")
 plt.xticks(fontsize=18, fontweight="heavy")
-plt.yticks(fontsize=18, fontweight="heavy", )
-plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+plt.yticks(
+    fontsize=18,
+    fontweight="heavy",
+)
+plt.gca().yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
 
 
 plt.xlim(0, score_means[-1] + score_stds[-1] * 3)
 plt.ylim(0, max_prob)
 
-plt.savefig( os.path.join( "calibration_test_%s_results" % args.mode, "%s_%s_%s_%d.pdf" % (backbone, method, supervision, num_digits) ), bbox_inches="tight")
+plt.savefig(
+    os.path.join(
+        "calibration_test_%s_results" % args.mode,
+        "%s_%s_%s_%d.pdf" % (backbone, method, supervision, num_digits),
+    ),
+    bbox_inches="tight",
+)

@@ -1,15 +1,16 @@
 import torch
 import torch.nn.functional as F
 
-
 ########################### GausianMLR Losses #################################
 
-sqrt_two = 2 ** 0.5
+sqrt_two = 2**0.5
 eps = 1.0e-4
+
 
 # The probability of a Gaussian variable being positive
 def gaussian_variable_positive_probability(z_mean, z_std):
     return 0.5 * (1 - torch.erf(-z_mean / (z_std * sqrt_two)))
+
 
 # GaussianMLR Classification Loss
 def GaussianMLRClassification(z_mean, z_std, labels):
@@ -23,6 +24,7 @@ def GaussianMLRClassification(z_mean, z_std, labels):
     smaller_zero_loss = torch.sum(-torch.log(smaller_zero_prob[labels == 0]))
 
     return (bigger_zero_loss + smaller_zero_loss) / (N * K)
+
 
 # GaussianMLR Ranking Loss
 def GaussianMLRRanking(z_mean, z_logvar, labels):
@@ -46,8 +48,8 @@ def GaussianMLRRanking(z_mean, z_logvar, labels):
     left_labels = labels[:, pair_map[:, 0]]
     right_labels = labels[:, pair_map[:, 1]]
 
-    gt_bigger_map = (left_labels > right_labels)
-    gt_smaller_map = (left_labels < right_labels)
+    gt_bigger_map = left_labels > right_labels
+    gt_smaller_map = left_labels < right_labels
 
     bigger_loss = torch.sum(-torch.log(bigger_prob[gt_bigger_map]))
     smaller_loss = torch.sum(-torch.log(smaller_prob[gt_smaller_map]))
@@ -55,6 +57,7 @@ def GaussianMLRRanking(z_mean, z_logvar, labels):
     norm_coeff_pairs = torch.sum(gt_bigger_map) + torch.sum(gt_smaller_map)
 
     return (bigger_loss + smaller_loss) / norm_coeff_pairs
+
 
 def GaussianMLR(z_mean, z_logvar, labels):
 
@@ -67,8 +70,9 @@ def GaussianMLR(z_mean, z_logvar, labels):
         "ranking_loss": ranking_loss,
     }
 
+
 def weak_GaussianMLR(z_mean, z_logvar, labels):
-    
+
     labels[labels > 0] = 1
 
     z_std = torch.exp(z_logvar / 2)
@@ -80,9 +84,11 @@ def weak_GaussianMLR(z_mean, z_logvar, labels):
         "ranking_loss": ranking_loss,
     }
 
+
 ###############################################################################
 
 ################################ CLR Losses ###################################
+
 
 def weak_CLR(pair_logits, labels):
 
@@ -91,28 +97,31 @@ def weak_CLR(pair_logits, labels):
     N, K = labels.shape
     labels = labels.float()
     labels = torch.cat((labels, torch.ones(N, 1, device=labels.device) * 0.5), dim=1)
-    K+=1
+    K += 1
 
     pair_map = torch.tensor([(i, j) for i in range(K - 1) for j in range(i + 1, K)])
     bigger_map = (labels[:, pair_map[:, 0]] > labels[:, pair_map[:, 1]]).float()
 
     return F.binary_cross_entropy_with_logits(pair_logits, bigger_map)
+
 
 def strong_CLR(pair_logits, labels):
 
-    N, K = labels.shape 
+    N, K = labels.shape
     labels = labels.float()
     labels = torch.cat((labels, torch.ones(N, 1, device=labels.device) * 0.5), dim=1)
-    K+=1
+    K += 1
 
     pair_map = torch.tensor([(i, j) for i in range(K - 1) for j in range(i + 1, K)])
     bigger_map = (labels[:, pair_map[:, 0]] > labels[:, pair_map[:, 1]]).float()
 
     return F.binary_cross_entropy_with_logits(pair_logits, bigger_map)
+
 
 ###############################################################################
 
 ################################# LSEP ########################################
+
 
 def MultiThresholdLoss(scores, threshold, labels):
 
@@ -145,6 +154,7 @@ def weak_LSEP(scores, labels):
 
     return torch.mean(instance_sum)
 
+
 def strong_LSEP(scores, labels):
 
     N, K = labels.shape
@@ -166,5 +176,6 @@ def strong_LSEP(scores, labels):
     instance_sum = torch.log(exp_scores.sum(1) + 1)
 
     return torch.mean(instance_sum)
+
 
 ###############################################################################

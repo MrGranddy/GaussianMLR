@@ -1,5 +1,5 @@
-import torchvision.models as models
 import torch.nn as nn
+import torchvision.models as models
 
 
 class SqueezeNetBackbone(nn.Module):
@@ -14,6 +14,7 @@ class SqueezeNetBackbone(nn.Module):
         x = x.view(x.size(0), -1)
         return x
 
+
 class SimpleBackbone(nn.Module):
     def __init__(self):
         super(SimpleBackbone, self).__init__()
@@ -22,21 +23,21 @@ class SimpleBackbone(nn.Module):
             nn.Conv2d(3, 64, kernel_size=7, stride=2),
             nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2, padding=1)
+            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
         )
 
         self.conv_block_1 = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=3, stride=2),
             nn.BatchNorm2d(128),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2)
+            nn.MaxPool2d(kernel_size=2, stride=2),
         )
 
         self.conv_block_2 = nn.Sequential(
             nn.Conv2d(128, 256, kernel_size=3, stride=2),
             nn.BatchNorm2d(256),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2)
+            nn.MaxPool2d(kernel_size=2, stride=2),
         )
 
         self.avgpool = nn.AdaptiveAvgPool2d(1)
@@ -63,7 +64,7 @@ class Model(nn.Module):
         elif feature_extractor == "squeezenet":
             self.feature_extractor = SqueezeNetBackbone()
             out_size = 512
-            
+
         elif feature_extractor == "resnet18":
             self.feature_extractor = models.resnet18(pretrained=pretrained)
             self.feature_extractor.fc = nn.Identity()
@@ -94,6 +95,7 @@ class Model(nn.Module):
 
         return logits
 
+
 class LSEPModel(nn.Module):
     def __init__(self, n_classes, feature_extractor="simple", pretrained=False):
         super(LSEPModel, self).__init__()
@@ -107,7 +109,7 @@ class LSEPModel(nn.Module):
         elif feature_extractor == "squeezenet":
             self.feature_extractor = SqueezeNetBackbone()
             out_size = 512
-            
+
         elif feature_extractor == "resnet18":
             self.feature_extractor = models.resnet18(pretrained=pretrained)
             self.feature_extractor.fc = nn.Identity()
@@ -146,6 +148,7 @@ class LSEPModel(nn.Module):
 
         return scores, thresholds
 
+
 class GaussianModel(nn.Module):
     def __init__(self, n_classes, feature_extractor="simple", pretrained=False):
         super(GaussianModel, self).__init__()
@@ -159,7 +162,7 @@ class GaussianModel(nn.Module):
         elif feature_extractor == "squeezenet":
             self.feature_extractor = SqueezeNetBackbone()
             out_size = 512
-            
+
         elif feature_extractor == "resnet18":
             self.feature_extractor = models.resnet18(pretrained=pretrained)
             self.feature_extractor.fc = nn.Identity()

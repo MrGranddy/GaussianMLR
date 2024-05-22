@@ -1,6 +1,9 @@
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
-import os
+import torch
+import torch.nn.functional as F
 
 
 def save_plot(stats, epoch_idx, path, prefix=""):
@@ -21,10 +24,6 @@ def save_plot(stats, epoch_idx, path, prefix=""):
     plt.savefig(os.path.join(path, "%s_loss_%d.png" % (prefix, epoch_idx)), dpi=300)
     plt.cla()
     plt.close()
-
-
-import torch
-import torch.nn.functional as F
 
 
 def calc_unranked_metrics(scores, labels):

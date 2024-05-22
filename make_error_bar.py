@@ -1,67 +1,80 @@
-import torch
-from torch.utils.data import DataLoader
+import argparse
 
 import numpy as np
-
-from model import GaussianModel, Model, LSEPModel
-from reader import RankedMNISTReader, LandscapeReader, ArchitectureReader
-
+import torch
 from scipy.stats import spearmanr
-from sklearn.metrics import hamming_loss, coverage_error, label_ranking_loss, label_ranking_average_precision_score
+from sklearn.metrics import (coverage_error, hamming_loss,
+                             label_ranking_average_precision_score,
+                             label_ranking_loss)
+from torch.utils.data import DataLoader
 
-import argparse
+from model import GaussianModel, LSEPModel, Model
+from reader import ArchitectureReader, LandscapeReader, RankedMNISTReader
+
 
 def ranking_metrics(scores, labels):
 
     N, K = labels.shape
 
     pair_map = np.array([(i, j) for i in range(K - 1) for j in range(i + 1, K)])
-    n0 = K * (K - 1) / 2 # Number of pairs
-    
-    full_tie_index = np.where( scores.sum(1) != 0 )[0]
+    n0 = K * (K - 1) / 2  # Number of pairs
+
+    full_tie_index = np.where(scores.sum(1) != 0)[0]
     scores = scores[full_tie_index, :]
     labels = labels[full_tie_index, :]
 
-    score_greater = ( scores[:, pair_map[:, 0]] > scores[:, pair_map[:, 1]]  )
-    score_smaller = ( scores[:, pair_map[:, 0]] < scores[:, pair_map[:, 1]]  )
-    score_equals =  ( scores[:, pair_map[:, 0]] == scores[:, pair_map[:, 1]] )
+    score_greater = scores[:, pair_map[:, 0]] > scores[:, pair_map[:, 1]]
+    score_smaller = scores[:, pair_map[:, 0]] < scores[:, pair_map[:, 1]]
+    score_equals = scores[:, pair_map[:, 0]] == scores[:, pair_map[:, 1]]
 
-    label_greater = ( labels[:, pair_map[:, 0]] > labels[:, pair_map[:, 1]]  )
-    label_smaller = ( labels[:, pair_map[:, 0]] < labels[:, pair_map[:, 1]]  )
-    label_equals =  ( labels[:, pair_map[:, 0]] == labels[:, pair_map[:, 1]] )
+    label_greater = labels[:, pair_map[:, 0]] > labels[:, pair_map[:, 1]]
+    label_smaller = labels[:, pair_map[:, 0]] < labels[:, pair_map[:, 1]]
+    label_equals = labels[:, pair_map[:, 0]] == labels[:, pair_map[:, 1]]
 
-    n1 = score_equals.sum(1).astype("float32") # Number of tied pairs in scores
-    n2 = label_equals.sum(1).astype("float32") # Number of tied pairs in labels
+    n1 = score_equals.sum(1).astype("float32")  # Number of tied pairs in scores
+    n2 = label_equals.sum(1).astype("float32")  # Number of tied pairs in labels
 
     nc = (
-        ((score_greater == 1) * (label_greater == 1)).astype("int32") +
-        ((score_smaller == 1) * (label_smaller == 1)).astype("int32")
-    ).sum(1).astype("float32") # Number of concordant pairs
+        (
+            ((score_greater == 1) * (label_greater == 1)).astype("int32")
+            + ((score_smaller == 1) * (label_smaller == 1)).astype("int32")
+        )
+        .sum(1)
+        .astype("float32")
+    )  # Number of concordant pairs
     nd = (
-        ((score_greater == 1) * (label_smaller == 1)).astype("int32") +
-        ((score_smaller == 1) * (label_greater == 1)).astype("int32")
-    ).sum(1).astype("float32") # Number of discordant pairs
-
+        (
+            ((score_greater == 1) * (label_smaller == 1)).astype("int32")
+            + ((score_smaller == 1) * (label_greater == 1)).astype("int32")
+        )
+        .sum(1)
+        .astype("float32")
+    )  # Number of discordant pairs
 
     # Kendall's Tau-a
     # https://en.wikipedia.org/wiki/Kendall_rank_correlation_coefficient
 
-    tau_a = np.sum( (nc - nd) / n0 ) / N
+    tau_a = np.sum((nc - nd) / n0) / N
 
     # Kendall's Tau-b
     # https://en.wikipedia.org/wiki/Kendall_rank_correlation_coefficient
 
-    tau_b = np.sum( (nc - nd) / np.sqrt( (n0 - n1) * (n0 - n2) ) ) / N
+    tau_b = np.sum((nc - nd) / np.sqrt((n0 - n1) * (n0 - n2))) / N
 
     # Spearman's Rho
     # https://en.wikipedia.org/wiki/Spearman%27s_rank_correlation_coefficient
 
-    spearman_rho = np.sum( [spearmanr(scores[i], labels[i], axis=1)[0] for i in range(scores.shape[0])] ) / N
+    spearman_rho = (
+        np.sum(
+            [spearmanr(scores[i], labels[i], axis=1)[0] for i in range(scores.shape[0])]
+        )
+        / N
+    )
 
     # Gamma Correlation
     # https://en.wikipedia.org/wiki/Goodman_and_Kruskal%27s_gamma
 
-    gamma = np.sum( (nc - nd) / (nc + nd) ) / N
+    gamma = np.sum((nc - nd) / (nc + nd)) / N
 
     return {
         "tau_a": tau_a,
@@ -70,10 +83,11 @@ def ranking_metrics(scores, labels):
         "gamma": gamma,
     }
 
+
 def classification_metrics(scores, labels):
 
     N, K = labels.shape
-    
+
     discrete_scores = (scores > 0).astype("int32")
     discrete_labels = (labels > 0).astype("int32")
 
@@ -85,16 +99,20 @@ def classification_metrics(scores, labels):
     max_idxs = np.argmax(scores, 1)
     max_one_error = np.zeros_like(scores)
     max_one_error[np.arange(len(max_one_error)), max_idxs] = 1
-    max_one_error = (1 - (max_one_error * discrete_labels).sum(1)).astype("float32").mean()
+    max_one_error = (
+        (1 - (max_one_error * discrete_labels).sum(1)).astype("float32").mean()
+    )
 
     # Coverage Error
     coverage = coverage_error(discrete_labels, scores)
 
     # Ranking
     ranking_loss = label_ranking_loss(discrete_labels, scores)
-    
+
     # Average Precision
-    ranking_average_precision = label_ranking_average_precision_score(discrete_labels, scores)
+    ranking_average_precision = label_ranking_average_precision_score(
+        discrete_labels, scores
+    )
 
     # F1-Score
     TP = (discrete_scores * discrete_labels).sum()
@@ -112,6 +130,7 @@ def classification_metrics(scores, labels):
         "ranking_average_precision": ranking_average_precision,
         "f1_score": f1_score,
     }
+
 
 bs = 64
 device_name = "cuda:1"
@@ -172,7 +191,7 @@ for run_idx in range(args.num_runs):
         best_path = "results/%s/saves/best.pth" % experiment_name
 
     elif args.method == "clr":
-        model = Model( (n_classes * (n_classes + 1)) // 2, args.backbone).to(device_name)
+        model = Model((n_classes * (n_classes + 1)) // 2, args.backbone).to(device_name)
         best_path = "results/%s/saves/best.pth" % experiment_name
 
     elif args.method == "lsep":
@@ -204,18 +223,30 @@ for run_idx in range(args.num_runs):
                 K += 1
                 logits = model(images)
                 probs = torch.sigmoid(logits)
-        
-                pair_map = torch.tensor([(i, j) for i in range(K - 1) for j in range(i + 1, K)]).to(device_name)
+
+                pair_map = torch.tensor(
+                    [(i, j) for i in range(K - 1) for j in range(i + 1, K)]
+                ).to(device_name)
                 left_scores = probs >= 0.5
                 right_scores = probs < 0.5
 
                 score_matrix = torch.zeros((N, K)).to(device_name)
 
                 for j in range(K):
-                    score_matrix[:, j] += torch.sum(left_scores[:, pair_map[:, 0] == j] * probs[:, pair_map[:, 0] == j], dim=1)
-                    score_matrix[:, j] += torch.sum(right_scores[:, pair_map[:, 1] == j] * probs[:, pair_map[:, 1] == j], dim=1)
+                    score_matrix[:, j] += torch.sum(
+                        left_scores[:, pair_map[:, 0] == j]
+                        * probs[:, pair_map[:, 0] == j],
+                        dim=1,
+                    )
+                    score_matrix[:, j] += torch.sum(
+                        right_scores[:, pair_map[:, 1] == j]
+                        * probs[:, pair_map[:, 1] == j],
+                        dim=1,
+                    )
 
-                negative_map = score_matrix < score_matrix[:, -1].unsqueeze(1).repeat(1, K)
+                negative_map = score_matrix < score_matrix[:, -1].unsqueeze(1).repeat(
+                    1, K
+                )
                 score_matrix[negative_map] = 0
 
                 scores = score_matrix[:, :-1]
@@ -232,7 +263,7 @@ for run_idx in range(args.num_runs):
                 if key not in ranking:
                     ranking[key] = []
                 ranking[key].append(new_metrics[key])
-            
+
             new_metrics = classification_metrics(scores, labels)
             for key in new_metrics:
                 if key not in classification:
@@ -240,23 +271,37 @@ for run_idx in range(args.num_runs):
                 classification[key].append(new_metrics[key])
 
     for key in ranking:
-        #ranking[key] = np.mean(ranking[key])
+        # ranking[key] = np.mean(ranking[key])
         if key not in run_scores["ranking"]:
             run_scores["ranking"][key] = []
-        run_scores["ranking"][key].append( np.mean( ranking[key] ) )
+        run_scores["ranking"][key].append(np.mean(ranking[key]))
 
     for key in classification:
-        #classification[key] = np.mean(classification[key])
+        # classification[key] = np.mean(classification[key])
         if key not in run_scores["classification"]:
             run_scores["classification"][key] = []
-        run_scores["classification"][key].append( np.mean( classification[key] ) )
+        run_scores["classification"][key].append(np.mean(classification[key]))
 
 
 with open("error_bar_results/%s_metrics.txt" % args.experiment_name, "w") as f:
     f.write("Ranking Metrics\n")
     for key in run_scores["ranking"]:
-        f.write("%s: mean: %.4f, std: %.4f\n" % ( key, np.mean(run_scores["ranking"][key]), np.std(run_scores["ranking"][key]) ))
+        f.write(
+            "%s: mean: %.4f, std: %.4f\n"
+            % (
+                key,
+                np.mean(run_scores["ranking"][key]),
+                np.std(run_scores["ranking"][key]),
+            )
+        )
     f.write("\n")
     f.write("Classification Metrics\n")
     for key in run_scores["classification"]:
-        f.write("%s: mean: %.4f, std: %.4f\n" % ( key, np.mean(run_scores["classification"][key]), np.std(run_scores["classification"][key]) ))
+        f.write(
+            "%s: mean: %.4f, std: %.4f\n"
+            % (
+                key,
+                np.mean(run_scores["classification"][key]),
+                np.std(run_scores["classification"][key]),
+            )
+        )

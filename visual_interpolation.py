@@ -1,17 +1,25 @@
-import torch
-from torch.utils.data import DataLoader
-
-import numpy as np
+import argparse
 import os
 
-from model import GaussianModel, Model, LSEPModel
+import numpy as np
+import torch
+from PIL import Image
+from torch.utils.data import DataLoader
+
+from model import GaussianModel, LSEPModel, Model
 from reader import LandscapeReader
 
-import argparse
-
-from PIL import Image
-
-class_names = ["plant", "sky", "cloud", "snow", "building", "desert", "mountain", "water", "sun"]
+class_names = [
+    "plant",
+    "sky",
+    "cloud",
+    "snow",
+    "building",
+    "desert",
+    "mountain",
+    "water",
+    "sun",
+]
 
 bs = 64
 device_name = "cuda:1"
@@ -41,7 +49,7 @@ if args.method == "gaussian_mlr":
     best_path = "results/%s/saves/best.pth" % args.experiment_name
 
 elif args.method == "clr":
-    n_classes += 1 # Add virtual label
+    n_classes += 1  # Add virtual label
     model = Model((n_classes * (n_classes - 1)) // 2, args.backbone).to(device_name)
     best_path = "results/%s/saves/best.pth" % args.experiment_name
 
@@ -75,16 +83,25 @@ with torch.no_grad():
             K += 1
             logits = model(images)
             probs = torch.sigmoid(logits)
-    
-            pair_map = torch.tensor([(i, j) for i in range(K - 1) for j in range(i + 1, K)]).to(device_name)
+
+            pair_map = torch.tensor(
+                [(i, j) for i in range(K - 1) for j in range(i + 1, K)]
+            ).to(device_name)
             left_scores = probs >= 0.5
             right_scores = probs < 0.5
 
             score_matrix = torch.zeros((N, K)).to(device_name)
 
             for j in range(K):
-                score_matrix[:, j] += torch.sum(left_scores[:, pair_map[:, 0] == j] * probs[:, pair_map[:, 0] == j], dim=1)
-                score_matrix[:, j] += torch.sum(right_scores[:, pair_map[:, 1] == j] * probs[:, pair_map[:, 1] == j], dim=1)
+                score_matrix[:, j] += torch.sum(
+                    left_scores[:, pair_map[:, 0] == j] * probs[:, pair_map[:, 0] == j],
+                    dim=1,
+                )
+                score_matrix[:, j] += torch.sum(
+                    right_scores[:, pair_map[:, 1] == j]
+                    * probs[:, pair_map[:, 1] == j],
+                    dim=1,
+                )
 
             negative_map = score_matrix < score_matrix[:, -1].unsqueeze(1).repeat(1, K)
             score_matrix[negative_map] = 0
@@ -102,14 +119,14 @@ with torch.no_grad():
         all_paths += [*paths]
 
 if args.method == "clr":
-    n_classes -= 1 # Remove virtual label
+    n_classes -= 1  # Remove virtual label
 
 all_scores = np.concatenate(all_scores, axis=0)
-#class_mins = np.min(all_scores, axis=0)
-#class_maxs = np.max(all_scores, axis=0)
-#class_mins = np.array([np.min(all_scores[:, i][all_scores[:, i] != class_mins[i]]) for i in range(n_classes)]) # Start from second min
-#class_maxs = np.array([np.max(all_scores[:, i][all_scores[:, i] != class_maxs[i]]) for i in range(n_classes)]) # Start from second max
-#class_interpolations = np.linspace(class_mins, class_maxs, 10)
+# class_mins = np.min(all_scores, axis=0)
+# class_maxs = np.max(all_scores, axis=0)
+# class_mins = np.array([np.min(all_scores[:, i][all_scores[:, i] != class_mins[i]]) for i in range(n_classes)]) # Start from second min
+# class_maxs = np.array([np.max(all_scores[:, i][all_scores[:, i] != class_maxs[i]]) for i in range(n_classes)]) # Start from second max
+# class_interpolations = np.linspace(class_mins, class_maxs, 10)
 
 method_path = "visual_interpolation_test_results/%s" % (args.experiment_name)
 os.makedirs(method_path, exist_ok=True)
@@ -121,10 +138,13 @@ for cidx, class_name in enumerate(class_names):
     sorted_scores = all_scores[sorted_idxs, cidx]
     first_nonzero = np.where(sorted_scores != 0)[0][0]
 
-    selecteds = np.linspace(first_nonzero, all_scores.shape[0]-1, 10).astype("int32")
-    selected_paths = [ [ sorted_paths[i + j] for i in selecteds ] for j in range(1) ]
+    selecteds = np.linspace(first_nonzero, all_scores.shape[0] - 1, 10).astype("int32")
+    selected_paths = [[sorted_paths[i + j] for i in selecteds] for j in range(1)]
 
-    imgs = [ [np.array(Image.open(col).resize((224, 224)).convert("RGB")) for col in row] for row in selected_paths ]
+    imgs = [
+        [np.array(Image.open(col).resize((224, 224)).convert("RGB")) for col in row]
+        for row in selected_paths
+    ]
     all_img = np.concatenate([np.concatenate(row, axis=1) for row in imgs], axis=0)
     print(all_img.shape)
 

@@ -1,18 +1,17 @@
-import os
-import shutil
+import hashlib
 import json
+import os
+import random
+import shutil
 
 import numpy as np
-import random
 from PIL import Image
-
-import hashlib
 
 num_digits = 4
 num_tests = 50
 
 hash_object = hashlib.md5(("calibration_%s" % num_digits).encode())
-seed = int(hash_object.hexdigest(), 16) % (10 ** 9 + 7)
+seed = int(hash_object.hexdigest(), 16) % (10**9 + 7)
 
 random.seed(seed)
 np.random.seed(seed)
@@ -39,6 +38,7 @@ if os.path.isdir(ranked_mnist_path):
     shutil.rmtree(ranked_mnist_path)
 os.makedirs(ranked_mnist_path)
 
+
 def put_digit(canvas, digit, center):
 
     h, w, _ = digit.shape
@@ -55,6 +55,7 @@ def put_digit(canvas, digit, center):
     canvas[t:b, l:r] = digit
     return canvas
 
+
 canvas = np.zeros((c_height, c_width, 3), dtype="float32")
 
 one_center = (56, 56)
@@ -63,8 +64,8 @@ three_center = (56, 168)
 four_center = (168, 56)
 
 scales = [1 + 0.5 * x for x in range(num_digits)]
-#scales = map(lambda x: 3 * x / num_digits, scales)
-#scales = [scale for scale in scales]
+# scales = map(lambda x: 3 * x / num_digits, scales)
+# scales = [scale for scale in scales]
 
 for n_idx in range(num_tests):
 
@@ -118,7 +119,6 @@ for n_idx in range(num_tests):
             / 255
         )
 
-    
     canvas = np.zeros((c_height, c_width, 3), dtype="float32")
 
     coords = [one_center, two_center, three_center, four_center]

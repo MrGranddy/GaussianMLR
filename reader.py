@@ -1,18 +1,14 @@
-from configparser import Interpolation
-import os
 import json
-
-import torch
-import torchvision.transforms.functional as TF
-import torch.nn.functional as F
+import os
+from configparser import Interpolation
 
 import numpy as np
-
-from torchvision import transforms
-
-from PIL import Image
-
 import scipy.io as sio
+import torch
+import torch.nn.functional as F
+import torchvision.transforms.functional as TF
+from PIL import Image
+from torchvision import transforms
 
 """
 1	plant
@@ -28,10 +24,17 @@ import scipy.io as sio
 """
 
 arc_categories = [
-    "asymmetric", "color", "crystallographic",
-    "flowing", "isolation", "progressive",
-    "regular", "shape", "symmetric",
+    "asymmetric",
+    "color",
+    "crystallographic",
+    "flowing",
+    "isolation",
+    "progressive",
+    "regular",
+    "shape",
+    "symmetric",
 ]
+
 
 class ArchitectureReader(torch.utils.data.Dataset):
     def __init__(self, main_path, mode="train", domain="ALL"):
@@ -56,10 +59,17 @@ class ArchitectureReader(torch.utils.data.Dataset):
 
         self.transform = transforms.Compose(
             [
-                transforms.RandAugment(num_ops=3, magnitude=10, num_magnitude_bins=40, interpolation=TF.InterpolationMode.BILINEAR),
+                transforms.RandAugment(
+                    num_ops=3,
+                    magnitude=10,
+                    num_magnitude_bins=40,
+                    interpolation=TF.InterpolationMode.BILINEAR,
+                ),
                 transforms.Resize((224, 224)),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                ),
             ]
         )
 
@@ -67,7 +77,9 @@ class ArchitectureReader(torch.utils.data.Dataset):
             [
                 transforms.Resize((224, 224), interpolation=Image.BILINEAR),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                ),
             ]
         )
 
@@ -108,6 +120,7 @@ class ArchitectureReader(torch.utils.data.Dataset):
         else:
             return img, ranked_one_hot_label, img_path
 
+
 class LandscapeReader(torch.utils.data.Dataset):
     def __init__(self, main_path, mode="train"):
 
@@ -115,15 +128,24 @@ class LandscapeReader(torch.utils.data.Dataset):
         self.config_path = os.path.join(main_path, "config.json")
         self.mode = mode
 
-        self.paths = sorted(os.listdir(os.path.join(main_path, "images")), key=lambda x: int(x.split(".")[0]))
+        self.paths = sorted(
+            os.listdir(os.path.join(main_path, "images")),
+            key=lambda x: int(x.split(".")[0]),
+        )
         self.paths = [os.path.join(main_path, "images", path) for path in self.paths]
         # Load data config
         with open(self.config_path, "r") as f:
             self.config = json.load(f)[mode]
-        
+
         self.raw_labels = sio.loadmat(os.path.join(main_path, "pic_scene.mat"))
-        
-        self.raw_labels =  [[[self.raw_labels["pic"][0][i][0][j][k] for k in range(10)] for j in range(10)] for i in range(2000)]
+
+        self.raw_labels = [
+            [
+                [self.raw_labels["pic"][0][i][0][j][k] for k in range(10)]
+                for j in range(10)
+            ]
+            for i in range(2000)
+        ]
         self.raw_labels = np.array(self.raw_labels)
 
         self.labels = np.ones_like(self.raw_labels) * 0
@@ -131,13 +153,15 @@ class LandscapeReader(torch.utils.data.Dataset):
             for j in range(10):
                 row = self.raw_labels[i, j, :]
                 vl_idx = np.where(row == 10)[0][0]
-                self.labels[i, j, row-1] = np.arange(10)
+                self.labels[i, j, row - 1] = np.arange(10)
                 self.labels[i, j, self.labels[i, j, :] > vl_idx] = vl_idx + 1
 
         self.labels = np.mean(self.labels, axis=1)
 
-        virtual_label_threshold = np.expand_dims( self.labels[:, -1], axis=1 ).repeat(10, axis=1)
-        self.labels[ self.labels > virtual_label_threshold ] = float("inf")
+        virtual_label_threshold = np.expand_dims(self.labels[:, -1], axis=1).repeat(
+            10, axis=1
+        )
+        self.labels[self.labels > virtual_label_threshold] = float("inf")
         self.labels = self.labels[:, :-1]
 
         for i in range(self.labels.shape[0]):
@@ -146,21 +170,26 @@ class LandscapeReader(torch.utils.data.Dataset):
             for j in range(len(uniques)):
                 self.labels[i, self.labels[i, :] == uniques[j]] = ranks[j]
 
-
-        #for i in range(self.labels.shape[0]):
+        # for i in range(self.labels.shape[0]):
         #    if np.sum(self.labels[i, :]) == 0:
         #        print(self.labels[i, :], i)
         # INDEX 253 IS ILL LABELED
         self.config = [x for x in self.config if x != 253]
 
-
         self.transform = transforms.Compose(
             [
-                transforms.RandAugment(num_ops=3, magnitude=10, num_magnitude_bins=40, interpolation=TF.InterpolationMode.BILINEAR),
-                #transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandAugment(
+                    num_ops=3,
+                    magnitude=10,
+                    num_magnitude_bins=40,
+                    interpolation=TF.InterpolationMode.BILINEAR,
+                ),
+                # transforms.RandomHorizontalFlip(p=0.5),
                 transforms.Resize((224, 224)),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                ),
             ]
         )
 
@@ -168,7 +197,9 @@ class LandscapeReader(torch.utils.data.Dataset):
             [
                 transforms.Resize((224, 224)),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                ),
             ]
         )
 
@@ -260,4 +291,4 @@ class RankedMNISTReader(torch.utils.data.Dataset):
             return img, torch.tensor(label), path
 
 
-#reader = LandscapeReader("landscape_dataset", "test")
+# reader = LandscapeReader("landscape_dataset", "test")
