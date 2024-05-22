@@ -1,5 +1,6 @@
 import random
 from collections import namedtuple
+from skimage import color
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -60,3 +61,53 @@ def place_digit(
         try_count += 1
 
     return None
+
+def rgb_to_lab(rgb_vector):
+    """
+    Convert a 3D RGB vector to a 3D LAB vector.
+
+    Args:
+        rgb_vector (tuple or list or np.ndarray): RGB vector with values in the range [0, 255].
+
+    Returns:
+        np.ndarray: LAB vector with values typically in the range of [0, 100] for L 
+                    and [-128, 127] for a and b.
+    """
+    # Ensure the input is a numpy array and normalize the RGB values to [0, 1]
+    rgb_normalized = np.array(rgb_vector) / 255.0
+    
+    # Reshape to a 3D array with one pixel (1, 1, 3)
+    rgb_normalized = rgb_normalized.reshape((1, 1, 3))
+    
+    # Convert RGB to LAB using skimage
+    lab_vector = color.rgb2lab(rgb_normalized)
+    
+    # Reshape back to a 1D array (3,)
+    lab_vector = lab_vector.reshape((3,))
+    
+    return lab_vector
+
+def lab_to_rgb(lab_vector):
+    """
+    Convert a 3D LAB vector to a 3D RGB vector.
+
+    Args:
+        lab_vector (tuple or list or np.ndarray): LAB vector with values typically in the range 
+                                                  of [0, 100] for L and [-128, 127] for a and b.
+
+    Returns:
+        np.ndarray: RGB vector with values in the range [0, 255].
+    """
+    # Ensure the input is a numpy array and reshape to a 3D array with one pixel (1, 1, 3)
+    lab_vector = np.array(lab_vector).reshape((1, 1, 3))
+    
+    # Convert LAB to RGB using skimage
+    rgb_normalized = color.lab2rgb(lab_vector)
+    
+    # Reshape back to a 1D array (3,)
+    rgb_normalized = rgb_normalized.reshape((3,))
+    
+    # Denormalize RGB values to [0, 255]
+    rgb_vector = (rgb_normalized * 255).astype(np.uint8)
+    
+    return rgb_vector

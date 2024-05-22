@@ -1,4 +1,4 @@
-MNIST_TRAIN_PATH: "dataset_creation/mnist_train.csv"
-MNIST_TEST_PATH: "dataset_creation/mnist_test.csv"
+MNIST_TRAIN_PATH: "MNIST/train"
+MNIST_TEST_PATH: "MNIST/test"
 DATASETS_PATH: "ranked_mnist_family"
 LABELS_PATH: "ranked_mnist_labels"

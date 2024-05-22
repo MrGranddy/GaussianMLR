@@ -12,6 +12,7 @@ from PIL import Image
 
 from digit_placement import DigitPlacement, place_digit
 from mnist_utils import load_mnist_paths
+from image_creator import ImageCreator
 
 def main():
     parser = argparse.ArgumentParser(
@@ -76,9 +77,6 @@ def main():
     for mode, size in sizes.items():
         mnist_mode = "train" if mode != "test" else "test"
         for idx in range(size):
-            canvas = np.zeros(
-                (config["C_HEIGHT"], config["C_WIDTH"], 3), dtype="float32"
-            )
             num_labels = random.choice(
                 range(config["MIN_NUM_LABELS"], config["MAX_NUM_LABELS"] + 1)
             )
@@ -99,20 +97,35 @@ def main():
                     put_digits.append(digit)
 
             put_digits.sort(key=lambda x: x.ratio)
+
+            image_creator = ImageCreator(
+                (config["C_HEIGHT"], config["C_WIDTH"])
+            )
+            image_creator.create_empty_canvas()
+
             gt = [0] * 10
 
             for rank, digit in enumerate(put_digits):
-                img = Image.open(digit.img_path).resize(
+
+                img = Image.open(digit.img_path).convert("RGB").resize(
                     (digit.scaled_length,) * 2, Image.BILINEAR
                 )
-                img_array = np.array(img)[..., 0] / 255.0
-                canvas[
-                    digit.y : digit.y + digit.scaled_length,
-                    digit.x : digit.x + digit.scaled_length,
-                ] = np.repeat(img_array[:, :, np.newaxis], 3, axis=2)
+                img_array = np.array(img)
+                
+                # Add alpha channel to the image
+                alpha = (img_array[:, :, 0] != 0).astype(np.uint8) * 255
+                img_array = np.dstack([img_array, alpha])
+
+                image_creator.add_element(
+                    img_array,
+                    (digit.y, digit.x),
+                )
+
                 gt[digit.label] = rank + 1
 
-            Image.fromarray((canvas * 255).astype("uint8")).save(
+            canvas = image_creator.get_canvas()
+
+            Image.fromarray(canvas).save(
                 os.path.join(dataset_path, mode, f"{idx}.png")
             )
             splitted_labels[mode].append(
