@@ -10,9 +10,13 @@ class ImageCreator:
             size (Tuple[int, int]): The size of the canvas to be created in the format (height, width)
         """
 
-        if not isinstance(size, tuple) or len(size) != 2 or not all(isinstance(i, int) for i in size):
+        if (
+            not isinstance(size, tuple)
+            or len(size) != 2
+            or not all(isinstance(i, int) for i in size)
+        ):
             raise ValueError("Size must be a tuple of two integers")
-        
+
         self.size = size
         self.canvas = None
 
@@ -24,7 +28,7 @@ class ImageCreator:
             print("Canvas already exists, overwriting it")
 
         self.canvas = np.zeros((self.size[0], self.size[1], 3), dtype="uint8")
-    
+
     def set_solid_color(self, color: Tuple[int, int, int]):
         """
         Set the canvas to a solid color
@@ -37,7 +41,7 @@ class ImageCreator:
             self.create_empty_canvas()
             print("Canvas was empty, created a new one")
 
-        self.canvas[:, :] = color # type: ignore
+        self.canvas[:, :] = color  # type: ignore
 
     def add_element(self, element: np.ndarray, position: Tuple[int, int]):
         """
@@ -51,24 +55,43 @@ class ImageCreator:
 
         if self.canvas is None:
             raise ValueError("Canvas is not created, please create a canvas first")
-        
-        if not isinstance(element, np.ndarray) or element.ndim != 3 or element.shape[2] != 4:
-            raise ValueError("Element must be a 3D numpy array with the last dimension being 4 for RGBA")
-    
-        if not isinstance(position, tuple) or len(position) != 2 or not all(isinstance(i, int) for i in position):
+
+        if (
+            not isinstance(element, np.ndarray)
+            or element.ndim != 3
+            or element.shape[2] != 4
+        ):
+            raise ValueError(
+                "Element must be a 3D numpy array with the last dimension being 4 for RGBA"
+            )
+
+        if (
+            not isinstance(position, tuple)
+            or len(position) != 2
+            or not all(isinstance(i, int) for i in position)
+        ):
             raise ValueError("Position must be a tuple of two integers")
-        
+
         y, x = position
 
         if y < 0 or y >= self.size[0] or x < 0 or x >= self.size[1]:
             raise ValueError("Position is out of bounds")
-        
+
         height, width = element.shape[:2]
 
-        if y - height // 2 < 0 or y + height // 2 >= self.size[0] or x - width // 2 < 0 or x + width // 2 >= self.size[1]:
+        if (
+            y - height // 2 < 0
+            or y + height // 2 >= self.size[0]
+            or x - width // 2 < 0
+            or x + width // 2 >= self.size[1]
+        ):
             raise ValueError("Element is out of bounds")
-        
-        self.canvas[y - height // 2 : y + height // 2, x - width // 2 : x + width // 2, element[:, :, 3] == 255] = element[element[:, :, 3] == 255]
+
+        self.canvas[
+            y - height // 2 : y + height // 2,
+            x - width // 2 : x + width // 2,
+            element[:, :, 3] == 255,
+        ] = element[element[:, :, 3] == 255]
 
     def get_canvas(self):
         """
@@ -79,4 +102,3 @@ class ImageCreator:
         """
 
         return self.canvas
-

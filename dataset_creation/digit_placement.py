@@ -1,10 +1,12 @@
-import numpy as np
 import random
-from typing import Dict, Tuple, List, Optional
 from collections import namedtuple
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
 
 # Define a namedtuple for digit placement details
-DigitPlacement = namedtuple('DigitPlacement', 'x y scaled_length ratio img_path label')
+DigitPlacement = namedtuple("DigitPlacement", "x y scaled_length ratio img_path label")
+
 
 def place_digit(
     mnist: Dict[int, List[str]],
@@ -13,7 +15,7 @@ def place_digit(
     c_width: int,
     ratio_lim: Tuple[float, float],
     min_margin: int,
-    put_digits: List[DigitPlacement]
+    put_digits: List[DigitPlacement],
 ) -> Optional[DigitPlacement]:
     """
     Attempts to place a digit image on a canvas while avoiding overlaps.
@@ -41,8 +43,13 @@ def place_digit(
 
         can_fit = True
         for digit in put_digits:
-            intersect_check = (2 * abs((l + scaled_len // 2) - (digit.x + digit.scaled_length // 2)) < (digit.scaled_length + scaled_len)) and \
-                              (2 * abs((t + scaled_len // 2) - (digit.y + digit.scaled_length // 2)) < (digit.scaled_length + scaled_len))
+            intersect_check = (
+                2 * abs((l + scaled_len // 2) - (digit.x + digit.scaled_length // 2))
+                < (digit.scaled_length + scaled_len)
+            ) and (
+                2 * abs((t + scaled_len // 2) - (digit.y + digit.scaled_length // 2))
+                < (digit.scaled_length + scaled_len)
+            )
             if intersect_check:
                 can_fit = False
                 break

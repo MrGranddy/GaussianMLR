@@ -1,7 +1,10 @@
-from typing import Dict, List
 import os
+from typing import Dict, List
 
-def load_mnist_paths(mnist_train_path: str, mnist_test_path: str) -> Dict[str, Dict[int, List[str]]]:
+
+def load_mnist_paths(
+    mnist_train_path: str, mnist_test_path: str
+) -> Dict[str, Dict[int, List[str]]]:
     """
     Loads MNIST dataset paths from the given directory paths for train and test datasets.
 

@@ -1,28 +1,29 @@
 import argparse
-import yaml
 import hashlib
 import json
 import os
 import random
 import shutil
-from typing import Dict, List, Tuple, Optional
+from typing import List
 
 import numpy as np
+import yaml
 from PIL import Image
-from collections import namedtuple
 
-from dataset_creation.digit_placement import place_digit, DigitPlacement
-from dataset_creation.mnist_utils import load_mnist_paths
+from digit_placement import DigitPlacement, place_digit
+from mnist_utils import load_mnist_paths
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate a synthetic dataset using MNIST digits.")
+    parser = argparse.ArgumentParser(
+        description="Generate a synthetic dataset using MNIST digits."
+    )
     parser.add_argument("config", help="Path to the YAML configuration file")
     args = parser.parse_args()
 
     with open(args.config, "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
         common_config_path = config["COMMON_CONFIG_PATH"]
-    
+
     with open(common_config_path, "r") as f:
         common_config = yaml.load(f, Loader=yaml.FullLoader)
 
@@ -43,8 +44,10 @@ def main():
     dataset_path = os.path.join(datasets_path, dataset_name)
 
     if os.path.exists(dataset_path):
-        sel = input("A folder for this dataset already exists, do you want to override? (Y/n) ")
-        if sel.lower() == 'y':
+        sel = input(
+            "A folder for this dataset already exists, do you want to override? (Y/n) "
+        )
+        if sel.lower() == "y":
             shutil.rmtree(dataset_path)
         else:
             print("Quitting...")
@@ -55,7 +58,7 @@ def main():
         "train": common_config["MNIST_TRAIN_PATH"],
         "test": common_config["MNIST_TEST_PATH"],
     }
-    mnist = load_mnist_paths(mnist_paths['train'], mnist_paths['test'])
+    mnist = load_mnist_paths(mnist_paths["train"], mnist_paths["test"])
 
     # Directory setup for train, val, test
     for mode in ["train", "val", "test"]:
@@ -67,20 +70,31 @@ def main():
     sizes = {
         "train": config["TRAIN_SIZE"],
         "val": config["VAL_SIZE"],
-        "test": config["TEST_SIZE"]
+        "test": config["TEST_SIZE"],
     }
 
     for mode, size in sizes.items():
         mnist_mode = "train" if mode != "test" else "test"
         for idx in range(size):
-            canvas = np.zeros((config["C_HEIGHT"], config["C_WIDTH"], 3), dtype="float32")
-            num_labels = random.choice(range(config["MIN_NUM_LABELS"], config["MAX_NUM_LABELS"] + 1))
+            canvas = np.zeros(
+                (config["C_HEIGHT"], config["C_WIDTH"], 3), dtype="float32"
+            )
+            num_labels = random.choice(
+                range(config["MIN_NUM_LABELS"], config["MAX_NUM_LABELS"] + 1)
+            )
             labels = np.random.choice(range(10), num_labels, replace=False)
             put_digits: List[DigitPlacement] = []
 
             for label in labels:
-                digit = place_digit(mnist[mnist_mode], label, config["C_HEIGHT"], config["C_WIDTH"],
-                                    config["RATIO_LIM"], config["MIN_MARGIN"], put_digits)
+                digit = place_digit(
+                    mnist[mnist_mode],
+                    label,
+                    config["C_HEIGHT"],
+                    config["C_WIDTH"],
+                    config["RATIO_LIM"],
+                    config["MIN_MARGIN"],
+                    put_digits,
+                )
                 if digit:
                     put_digits.append(digit)
 
@@ -88,13 +102,22 @@ def main():
             gt = [0] * 10
 
             for rank, digit in enumerate(put_digits):
-                img = Image.open(digit.img_path).resize((digit.scaled_length,) * 2, Image.BILINEAR)
+                img = Image.open(digit.img_path).resize(
+                    (digit.scaled_length,) * 2, Image.BILINEAR
+                )
                 img_array = np.array(img)[..., 0] / 255.0
-                canvas[digit.y:digit.y + digit.scaled_length, digit.x:digit.x + digit.scaled_length] = np.repeat(img_array[:, :, np.newaxis], 3, axis=2)
+                canvas[
+                    digit.y : digit.y + digit.scaled_length,
+                    digit.x : digit.x + digit.scaled_length,
+                ] = np.repeat(img_array[:, :, np.newaxis], 3, axis=2)
                 gt[digit.label] = rank + 1
 
-            Image.fromarray((canvas * 255).astype("uint8")).save(os.path.join(dataset_path, mode, f"{idx}.png"))
-            splitted_labels[mode].append((os.path.join(dataset_name, mode, f"{idx}.png"), gt))
+            Image.fromarray((canvas * 255).astype("uint8")).save(
+                os.path.join(dataset_path, mode, f"{idx}.png")
+            )
+            splitted_labels[mode].append(
+                (os.path.join(dataset_name, mode, f"{idx}.png"), gt)
+            )
 
             if idx % 100 == 0:
                 print(f"{mode}: {idx}/{size}")
